@@ -65,11 +65,11 @@ struct tTypeStack_ {
 #define DeleteOps(ops_) free(ops_.p); free(ops_.pSequencePoints)
 
 // Turn this into a MACRO at some point?
-static U32 Translate(U32 op) {
+static void* Translate(U32 op) {
 	if (op >= JIT_OPCODE_MAXNUM) {
 		Crash("Illegal opcode: %d", op);
 	}
-	return (U32)jitFuncs[op];
+	return jitFuncs[op];
 }
 
 #define PushU32(v) PushU32_(&ops, (U32)(v), -1)
@@ -77,7 +77,7 @@ static U32 Translate(U32 op) {
 #define PushFloat(v) convFloat.f=(float)(v); PushU32_(&ops, convFloat.u32, -1)
 #define PushDouble(v) convDouble.d=(double)(v); PushU32_(&ops, convDouble.u32.a, -1); PushU32_(&ops, convDouble.u32.b, -1)
 #define PushPTR(ptr) PushU32_(&ops, (U32)(ptr), -1)
-#define PushOp(op) PushU32_(&ops, Translate((U32)(op)), nextOpSequencePoint)
+#define PushOp(op) PushU32_(&ops, (U32)Translate((U32)(op)), nextOpSequencePoint)
 #define PushOpParam(op, param) PushOp(op); PushU32_(&ops, (U32)(param), -1)
 
 #define PushBranch() PushU32_(&branchOffsets, ops.ofs, -1)
@@ -112,6 +112,17 @@ static void PushU32_(tOps *pOps, U32 v, I32 opSequencePoint) {
 //		printf("a.pOps->p = 0x%08x size=%d\n", pOps->p, pOps->capacity * sizeof(U32));
 		pOps->p = realloc(pOps->p, pOps->capacity * sizeof(U32));
 		pOps->pSequencePoints = realloc(pOps->pSequencePoints, pOps->capacity * sizeof(U32));
+	}
+	pOps->pSequencePoints[pOps->ofs] = opSequencePoint;
+	pOps->p[pOps->ofs++] = v;
+}
+
+static void PushU64_(tOps *pOps, U64 v, I32 opSequencePoint) {
+	if (pOps->ofs >= pOps->capacity) {
+		pOps->capacity <<= 1;
+//		printf("a.pOps->p = 0x%08x size=%d\n", pOps->p, pOps->capacity * sizeof(U32));
+		pOps->p = realloc(pOps->p, pOps->capacity * sizeof(U64));
+		pOps->pSequencePoints = realloc(pOps->pSequencePoints, pOps->capacity * sizeof(U64));
 	}
 	pOps->pSequencePoints[pOps->ofs] = opSequencePoint;
 	pOps->p[pOps->ofs++] = v;
@@ -159,7 +170,7 @@ static SetBreakPoint(tMD_MethodDef *pMethodDef, U32 cilOfs, tOps ops)
     
 }
 
-static U32* JITit(tMD_MethodDef *pMethodDef, U8 *pCIL, U32 codeSize, tParameter *pLocals, tJITted *pJITted, U32 genCombinedOpcodes, I32 **ppSequencePoints) {
+static U32* JITit(tMD_MethodDef *pMethodDef, U8 *pCIL, U32 codeSize, tParameter *pLocals, tJITted *pJITted, I32 **ppSequencePoints) {
 	U32 maxStack = pJITted->maxStack;
 	U32 i;
 	U32 cilOfs;
@@ -1484,7 +1495,7 @@ cilLeave:
 
 	// Copy ops to some memory of exactly the correct size. To not waste memory.
 	u32Value = ops.ofs * sizeof(U32);
-	pFinalOps = genCombinedOpcodes?malloc(u32Value):mallocForever(u32Value);
+	pFinalOps = mallocForever(u32Value);
 	memcpy(pFinalOps, ops.p, u32Value);
 	
 	pJITted->pDebugMetadataEntry = pDebugMetadataEntry;
@@ -1503,7 +1514,7 @@ cilLeave:
 
 // Prepare a method for execution
 // This makes sure that the method has been JITed.
-void JIT_Prepare(tMD_MethodDef *pMethodDef, U32 genCombinedOpcodes) {
+void JIT_Prepare(tMD_MethodDef *pMethodDef) {
 	tMetaData *pMetaData;
 	U8 *pMethodHeader;
 	tJITted *pJITted;
@@ -1518,7 +1529,7 @@ void JIT_Prepare(tMD_MethodDef *pMethodDef, U32 genCombinedOpcodes) {
 	log_f(2, "JIT:   %s\n", Sys_GetMethodDesc(pMethodDef));
 
 	pMetaData = pMethodDef->pMetaData;
-	pJITted = (genCombinedOpcodes)?TMALLOC(tJITted):TMALLOCFOREVER(tJITted);
+	pJITted = TMALLOCFOREVER(tJITted);
 	pMethodDef->pJITted = pJITted;
 
 	if ((pMethodDef->implFlags & METHODIMPLATTRIBUTES_INTERNALCALL) ||
@@ -1576,8 +1587,7 @@ void JIT_Prepare(tMD_MethodDef *pMethodDef, U32 genCombinedOpcodes) {
 			numClauses = ((*(U32*)pMethodHeader >> 8) - 4) / 24;
 			//pJITted->pExceptionHeaders = (tExceptionHeader*)(pMethodHeader + 4);
 			exSize = numClauses * sizeof(tExceptionHeader);
-			pJITted->pExceptionHeaders =
-				(tExceptionHeader*)(genCombinedOpcodes?malloc(exSize):mallocForever(exSize));
+			pJITted->pExceptionHeaders = (tExceptionHeader*)mallocForever(exSize);
 			memcpy(pJITted->pExceptionHeaders, pMethodHeader + 4, exSize);
 		} else {
 			// Thin header
@@ -1588,8 +1598,7 @@ void JIT_Prepare(tMD_MethodDef *pMethodDef, U32 genCombinedOpcodes) {
 			exSize = numClauses * sizeof(tExceptionHeader);
 			pMethodHeader += 4;
 			//pExHeaders = pJITted->pExceptionHeaders = (tExceptionHeader*)mallocForever(numClauses * sizeof(tExceptionHeader));
-			pExHeaders = pJITted->pExceptionHeaders =
-				(tExceptionHeader*)(genCombinedOpcodes?malloc(exSize):mallocForever(exSize));
+			pExHeaders = pJITted->pExceptionHeaders = (tExceptionHeader*)mallocForever(exSize);
 			for (i=0; i<numClauses; i++) {
 				pExHeaders[i].flags = ((U16*)pMethodHeader)[0];
 				pExHeaders[i].tryStart = ((U16*)pMethodHeader)[1];
@@ -1644,7 +1653,7 @@ void JIT_Prepare(tMD_MethodDef *pMethodDef, U32 genCombinedOpcodes) {
 
 	// JIT the CIL code
 	I32 *pSequencePoints;
-	pJITted->pOps = JITit(pMethodDef, pCIL, codeSize, pLocals, pJITted, genCombinedOpcodes, &pSequencePoints);
+	pJITted->pOps = JITit(pMethodDef, pCIL, codeSize, pLocals, pJITted, &pSequencePoints);
 	pJITted->pOpSequencePoints = pSequencePoints;
 
 	free(pLocals);

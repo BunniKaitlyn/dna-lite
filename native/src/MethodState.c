@@ -42,7 +42,7 @@ tMethodState* MethodState_Direct(tThread *pThread, tMD_MethodDef *pMethod, tMeth
 	pThis->pMethod = pMethod;
 	if (pMethod->pJITted == NULL) {
 		// If method has not already been JITted
-		JIT_Prepare(pMethod, 0);
+		JIT_Prepare(pMethod);
 	}
 	pThis->pJIT = pMethod->pJITted;
 	pThis->ipOffset = 0;
