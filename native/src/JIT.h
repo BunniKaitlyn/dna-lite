@@ -79,13 +79,13 @@ struct tExceptionHeader_ {
 
 typedef struct tJITCallNative_ tJITCallNative;
 struct tJITCallNative_ {
-	U32 opCode;
+	U64 opCode;
 	// The method meta-data
 	tMD_MethodDef *pMethodDef;
 	// the native pointer to the function
 	fnInternalCall fn;
 	// The RET instruction. This is needed when the native function has blocking IO or sleep
-	U32 retOpCode;
+	U64 retOpCode;
 };
 
 typedef struct tJITCallPInvoke_ tJITCallPInvoke;
@@ -101,15 +101,13 @@ struct tJITCallPInvoke_ {
 
 typedef struct tJITCodeInfo_ {
 	// The beginning and end of the actual native code to run the JIT opcode.
-	void *pStart;
-	void *pEnd;
+	void *pFunc;
 	U32 isDynamic;
 } tJITCodeInfo;
 
 #include "JIT_OpCodes.h"
 
 extern tJITCodeInfo jitCodeInfo[JIT_OPCODE_MAXNUM];
-extern tJITCodeInfo jitCodeGoNext;
 
 void JIT_Execute_Init();
 

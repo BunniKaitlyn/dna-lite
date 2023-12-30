@@ -66,17 +66,16 @@ struct tTypeStack_ {
 #define DeleteOps(ops_) free(ops_.p); free(ops_.pSequencePoints)
 
 // Turn this into a MACRO at some point?
-static U32 Translate(U32 op, U32 getDynamic) {
+static U64 Translate(U32 op, U32 getDynamic) {
 	if (op >= JIT_OPCODE_MAXNUM) {
 		Crash("Illegal opcode: %d", op);
 	}
-	if (jitCodeInfo[op].pEnd == NULL) {
-		Crash("Opcode not available: 0x%08x", op);
-	}
 	if (getDynamic) {
-		return (U32)jitCodeInfo[op].isDynamic;
+		Crash("Illegal opcode: %d", op);
+		//return (U64)jitCodeInfo[op].isDynamic;
+		return 0;
 	} else {
-		return (U32)jitCodeInfo[op].pStart;
+		return (U64)jitCodeInfo[op].pFunc;
 	}
 }
 
