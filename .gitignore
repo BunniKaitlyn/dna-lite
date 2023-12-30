@@ -1,3 +1,7 @@
+.vs
+*.user
 Debug
+Release
 native/Debug
-native/x64
+native/Release
+obj/
