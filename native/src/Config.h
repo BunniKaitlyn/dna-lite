@@ -50,12 +50,4 @@
 
 // Non-diagnostic stuff
 
-// Generate combined (dynamic) .NET opcodes.
-// This does work, but currently has no intellegence about which opcodes
-// are worth combining, so it uses lots of memory and on some platforms
-// will not lead to a performance increase.
-//#define GEN_COMBINED_OPCODES
-#define GEN_COMBINED_OPCODES_MAX_MEMORY 0x4000
-#define GEN_COMBINED_OPCODES_CALL_TRIGGER 20
-
 #endif

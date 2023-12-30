@@ -80,15 +80,6 @@ static U32 Translate(U32 op, U32 getDynamic) {
 	}
 }
 
-#ifdef GEN_COMBINED_OPCODES
-#define PushU32(v) PushU32_(&ops, (U32)(v)); PushU32_(&isDynamic, 0)
-#define PushI32(v) PushU32_(&ops, (U32)(v)); PushU32_(&isDynamic, 0)
-#define PushFloat(v) convFloat.f=(float)(v); PushU32_(&ops, convFloat.u32); PushU32_(&isDynamic, 0)
-#define PushDouble(v) convDouble.d=(double)(v); PushU32_(&ops, convDouble.u32.a); PushU32_(&ops, convDouble.u32.b); PushU32_(&isDynamic, 0); PushU32_(&isDynamic, 0)
-#define PushPTR(ptr) PushU32_(&ops, (U32)(ptr)); PushU32_(&isDynamic, 0)
-#define PushOp(op) PushU32_(&ops, Translate((U32)(op), 0)); PushU32_(&isDynamic,	 Translate((U32)(op), 1))
-#define PushOpParam(op, param) PushOp(op); PushU32_(&ops, (U32)(param)); PushU32_(&isDynamic, 0)
-#else
 #define PushU32(v) PushU32_(&ops, (U32)(v), -1)
 #define PushI32(v) PushU32_(&ops, (U32)(v), -1)
 #define PushFloat(v) convFloat.f=(float)(v); PushU32_(&ops, convFloat.u32, -1)
@@ -96,7 +87,6 @@ static U32 Translate(U32 op, U32 getDynamic) {
 #define PushPTR(ptr) PushU32_(&ops, (U32)(ptr), -1)
 #define PushOp(op) PushU32_(&ops, Translate((U32)(op), 0), nextOpSequencePoint)
 #define PushOpParam(op, param) PushOp(op); PushU32_(&ops, (U32)(param), -1)
-#endif
 
 #define PushBranch() PushU32_(&branchOffsets, ops.ofs, -1)
 
@@ -172,67 +162,6 @@ static void RestoreTypeStack(tTypeStack *pMainStack, tTypeStack *pCopyFrom) {
 	}
 }
 
-#ifdef GEN_COMBINED_OPCODES
-static U32 FindOpCode(void *pAddr) {
-	U32 i;
-	for (i=0; i<JIT_OPCODE_MAXNUM; i++) {
-		if (jitCodeInfo[i].pStart == pAddr) {
-			return i;
-		}
-	}
-	Crash("Cannot find opcode for address: 0x%08x", (U32)pAddr);
-	FAKE_RETURN;
-}
-
-static U32 combinedMemSize = 0;
-static U32 GenCombined(tOps *pOps, tOps *pIsDynamic, U32 startOfs, U32 count, U32 *pCombinedSize, void **ppMem) {
-	U32 memSize;
-	U32 ofs;
-	void *pCombined;
-	U32 opCopyToOfs;
-	U32 shrinkOpsBy;
-	U32 goNextSize = (U32)((char*)jitCodeGoNext.pEnd - (char*)jitCodeGoNext.pStart);
-
-	// Get length of final combined code chunk
-	memSize = 0;
-	for (ofs=0; ofs < count; ofs++) {
-		U32 opcode = FindOpCode((void*)pOps->p[startOfs + ofs]);
-		U32 size = (U32)((char*)jitCodeInfo[opcode].pEnd - (char*)jitCodeInfo[opcode].pStart);
-		memSize += size;
-		ofs += (pIsDynamic->p[startOfs + ofs] & DYNAMIC_BYTE_COUNT_MASK) >> 2;
-	}
-	// Add length of GoNext code
-	memSize += goNextSize;
-
-	pCombined = malloc(memSize);
-	*ppMem = pCombined;
-	combinedMemSize += memSize;
-	*pCombinedSize = memSize;
-	//log_f(0, "Combined JIT size: %d\n", combinedMemSize);
-
-	// Copy the bits of code into place
-	memSize = 0;
-	opCopyToOfs = 1;
-	for (ofs=0; ofs < count; ofs++) {
-		U32 extraOpBytes;
-		U32 opcode = FindOpCode((void*)pOps->p[startOfs + ofs]);
-		U32 size = (U32)((char*)jitCodeInfo[opcode].pEnd - (char*)jitCodeInfo[opcode].pStart);
-		memcpy((char*)pCombined + memSize, jitCodeInfo[opcode].pStart, size);
-		memSize += size;
-		extraOpBytes = pIsDynamic->p[startOfs + ofs] & DYNAMIC_BYTE_COUNT_MASK;
-		memmove(&pOps->p[startOfs + opCopyToOfs], &pOps->p[startOfs + ofs + 1], extraOpBytes);
-		opCopyToOfs += extraOpBytes >> 2;
-		ofs += extraOpBytes >> 2;
-	}
-	shrinkOpsBy = ofs - opCopyToOfs;
-	// Add GoNext code
-	memcpy((char*)pCombined + memSize, jitCodeGoNext.pStart, goNextSize);
-	pOps->p[startOfs] = (U32)pCombined;
-
-	return shrinkOpsBy;
-}
-#endif
-
 static SetBreakPoint(tMD_MethodDef *pMethodDef, U32 cilOfs, tOps ops)
 {
     
@@ -250,10 +179,6 @@ static U32* JITit(tMD_MethodDef *pMethodDef, U8 *pCIL, U32 codeSize, tParameter 
 	U32 *pFinalOps;
 	tMD_TypeDef *pStackType;
 	tTypeStack typeStack;
-
-#ifdef GEN_COMBINED_OPCODES
-	tOps isDynamic;
-#endif
 
 	I32 i32Value;
 	U32 u32Value, u32Value2, ofs;
@@ -319,9 +244,6 @@ static U32* JITit(tMD_MethodDef *pMethodDef, U8 *pCIL, U32 codeSize, tParameter 
 
 	InitOps(ops, 32);
 	InitOps(branchOffsets, 16);
-#ifdef GEN_COMBINED_OPCODES
-	InitOps(isDynamic, 32);
-#endif
 
 	cilOfs = 0;
 
@@ -1539,9 +1461,6 @@ cilLeave:
 		// Rewrite the branch offset
 		jumpTarget = pJITOffsets[jumpTarget];
 		ops.p[ofs] = jumpTarget;
-#ifdef GEN_COMBINED_OPCODES
-		isDynamic.p[jumpTarget] |= DYNAMIC_JUMP_TARGET;
-#endif
 	}
 
 	// Apply expection handler offset fixes
@@ -1553,89 +1472,7 @@ cilLeave:
 		pEx->tryStart = pJITOffsets[pEx->tryStart];
 		pEx->handlerEnd = pJITOffsets[pEx->handlerStart + pEx->handlerEnd];
 		pEx->handlerStart = pJITOffsets[pEx->handlerStart];
-#ifdef GEN_COMBINED_OPCODES
-		isDynamic.p[pEx->tryStart] |= DYNAMIC_EX_START | DYNAMIC_JUMP_TARGET;
-		isDynamic.p[pEx->tryEnd] |= DYNAMIC_EX_END | DYNAMIC_JUMP_TARGET;
-		isDynamic.p[pEx->handlerStart] |= DYNAMIC_EX_START | DYNAMIC_JUMP_TARGET;
-		isDynamic.p[pEx->handlerEnd] |= DYNAMIC_EX_END | DYNAMIC_JUMP_TARGET;
-#endif
 	}
-
-#ifdef GEN_COMBINED_OPCODES
-	// Find any candidates for instruction combining
-	// WARNING: The logic here doesn't yet corresponding fix up the sequence points we're tracking for debugging
-	//          That's OK right now because none of this optimisation is actually used in current builds.
-	if (genCombinedOpcodes) {
-		U32 inst0 = 0;
-		while (inst0 < ops.ofs) {
-			U32 opCodeCount = 0;
-			U32 instCount = 0;
-			U32 shrinkOpsBy;
-			U32 isFirstInst;
-			while (!(isDynamic.p[inst0] & DYNAMIC_OK)) {
-				inst0++;
-				if (inst0 >= ops.ofs) {
-					goto combineDone;
-				}
-			}
-			isFirstInst = 1;
-			while (isDynamic.p[inst0 + instCount] & DYNAMIC_OK) {
-				if (isFirstInst) {
-					isFirstInst = 0;
-				} else {
-					if (isDynamic.p[inst0 + instCount] & DYNAMIC_JUMP_TARGET) {
-						// Cannot span a jump target
-						break;
-					}
-				}
-				instCount += 1 + ((isDynamic.p[inst0 + instCount] & DYNAMIC_BYTE_COUNT_MASK) >> 2);
-				opCodeCount++;
-			}
-			shrinkOpsBy = 0;
-			if (opCodeCount > 1) {
-				U32 combinedSize;
-				tCombinedOpcodesMem *pCOMem = TMALLOC(tCombinedOpcodesMem);
-				shrinkOpsBy = GenCombined(&ops, &isDynamic, inst0, instCount, &combinedSize, &pCOMem->pMem);
-				pCOMem->pNext = pJITted->pCombinedOpcodesMem;
-				pJITted->pCombinedOpcodesMem = pCOMem;
-				pJITted->opsMemSize += combinedSize;
-				memmove(&ops.p[inst0 + instCount - shrinkOpsBy], &ops.p[inst0 + instCount], (ops.ofs - inst0 - instCount) << 2);
-				memmove(&isDynamic.p[inst0 + instCount - shrinkOpsBy], &isDynamic.p[inst0 + instCount], (ops.ofs - inst0 - instCount) << 2);
-				ops.ofs -= shrinkOpsBy;
-				isDynamic.ofs -= shrinkOpsBy;
-				for (i=0; i<branchOffsets.ofs; i++) {
-					U32 ofs;
-					if (branchOffsets.p[i] > inst0) {
-						branchOffsets.p[i] -= shrinkOpsBy;
-					}
-					ofs = branchOffsets.p[i];
-					if (ops.p[ofs] > inst0) {
-						ops.p[ofs] -= shrinkOpsBy;
-					}
-				}
-				for (i=0; i<pJITted->numExceptionHandlers; i++) {
-					tExceptionHeader *pEx;
-
-					pEx = &pJITted->pExceptionHeaders[i];
-					if (pEx->tryStart > inst0) {
-						pEx->tryStart -= shrinkOpsBy;
-					}
-					if (pEx->tryEnd > inst0) {
-						pEx->tryEnd -= shrinkOpsBy;
-					}
-					if (pEx->handlerStart > inst0) {
-						pEx->handlerStart -= shrinkOpsBy;
-					}
-					if (pEx->handlerEnd > inst0) {
-						pEx->handlerEnd -= shrinkOpsBy;
-					}
-				}
-			}
-			inst0 += instCount - shrinkOpsBy;
-		}
-	}
-combineDone:
-#endif
 
 	// Change maxStack to indicate the number of bytes needed on the evaluation stack.
 	// This is the largest number of bytes needed by all objects/value-types on the stack,
@@ -1668,10 +1505,6 @@ combineDone:
 	}
 
 	DeleteOps(ops);
-#ifdef GEN_COMBINED_OPCODES
-	pJITted->opsMemSize += u32Value;
-	DeleteOps(isDynamic);
-#endif
 
 	return pFinalOps;
 }
@@ -1694,17 +1527,7 @@ void JIT_Prepare(tMD_MethodDef *pMethodDef, U32 genCombinedOpcodes) {
 
 	pMetaData = pMethodDef->pMetaData;
 	pJITted = (genCombinedOpcodes)?TMALLOC(tJITted):TMALLOCFOREVER(tJITted);
-#ifdef GEN_COMBINED_OPCODES
-	pJITted->pCombinedOpcodesMem = NULL;
-	pJITted->opsMemSize = 0;
-	if (genCombinedOpcodes) {
-		pMethodDef->pJITtedCombined = pJITted;
-	} else {
-		pMethodDef->pJITted = pJITted;
-	}
-#else
 	pMethodDef->pJITted = pJITted;
-#endif
 
 	if ((pMethodDef->implFlags & METHODIMPLATTRIBUTES_INTERNALCALL) ||
 		((pMethodDef->implFlags & METHODIMPLATTRIBUTES_CODETYPE_MASK) == METHODIMPLATTRIBUTES_CODETYPE_RUNTIME)) {

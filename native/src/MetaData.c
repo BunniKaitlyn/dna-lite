@@ -154,9 +154,6 @@ static char* tableDefs[] = {
 	NULL,
 	// 0x06
 	"x*m*^*ssssS*B*\x08*x*x*x*x*x*x*I*x*x*x*"
-#ifdef GEN_COMBINED_OPCODES
-	"x*x*x*x*x*x*"
-#endif
 #ifdef DIAG_METHOD_CALLS
 	"x*x*x*"
 #endif

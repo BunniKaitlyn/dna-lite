@@ -243,19 +243,6 @@ struct tMD_MethodDef_ {
 	// If this is a generic core method, then store type instances here.
 	tGenericMethodInstance *pGenericMethodInstances;
 
-#ifdef GEN_COMBINED_OPCODES
-	// The number of times this method is on the call stack of all threads
-	U32 callStackCount;
-	// The number of times this method has been called
-	U64 genCallCount;
-	// Pointer to the method that has the next highest number of calls
-	tMD_MethodDef *pNextHighestCalls;
-	// Pointer to the method that has the prev highest number of calls
-	tMD_MethodDef *pPrevHighestCalls;
-	// If this method currently has a combined opcode JIT version, then point to it here.
-	tJITted *pJITtedCombined;
-#endif
-
 #ifdef DIAG_METHOD_CALLS
 	// Number of times this method has been called
 	U32 callCount;

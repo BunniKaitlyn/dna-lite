@@ -38,14 +38,6 @@ typedef int(*fnPInvoke)(STRING libName, STRING funcName, STRING arg0);
 
 #include "Types.h"
 
-#ifdef GEN_COMBINED_OPCODES
-typedef struct tCombinedOpcodesMem_ tCombinedOpcodesMem;
-struct tCombinedOpcodesMem_ {
-	void *pMem;
-	tCombinedOpcodesMem *pNext;
-};
-#endif
-
 struct tJITted_ {
 	// The JITted opcodes
 	U32 *pOps;
@@ -61,13 +53,6 @@ struct tJITted_ {
 	tExceptionHeader *pExceptionHeaders;
 	// If we have debug metadata for this method, points to it
 	tDebugMetaDataEntry *pDebugMetadataEntry;
-#ifdef GEN_COMBINED_OPCODES
-	// The number of bytes used by this JITted method - to include ALL bytes:
-	// The size of the opcodes, plus the size of the combined opcodes.
-	U32 opsMemSize;
-	// Store all memory used to store combined opcodes, so they can be free()d later
-	tCombinedOpcodesMem *pCombinedOpcodesMem;
-#endif
 };
 
 #include "MetaDataTables.h"
