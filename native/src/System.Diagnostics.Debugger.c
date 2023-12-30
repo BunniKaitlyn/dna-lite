@@ -26,7 +26,6 @@
 #include "MetaData.h"
 #include "Types.h"
 #include "Type.h"
-#include "PInvoke.h"
 
 
 typedef struct tBreakPoint_ tBreakPoint;

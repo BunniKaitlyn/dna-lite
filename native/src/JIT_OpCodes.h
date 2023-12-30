@@ -73,7 +73,7 @@
 #define	JIT_LOADFIELD				0x25
 #define JIT_LOADFUNCTION			0x26
 #define JIT_INVOKE_DELEGATE			0x27
-#define JIT_CALL_PINVOKE			0x28
+//#define JIT_CALL_PINVOKE			0x28
 #define JIT_LOAD_I64				0x29
 #define JIT_INIT_OBJECT				0x2a
 #define JIT_DUP_4					0x2b

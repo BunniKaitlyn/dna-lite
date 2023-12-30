@@ -63,15 +63,6 @@
     <ClInclude Include="src\MethodState.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\PInvoke.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\PInvoke_CaseCode.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\PInvoke_TypeDef.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\RVA.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -219,9 +210,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\MethodState.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\PInvoke.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\RVA.c">

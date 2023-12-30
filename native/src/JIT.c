@@ -32,7 +32,6 @@
 #include "Type.h"
 #include "InternalCall.h"
 #include "Heap.h"
-#include "PInvoke.h"
 
 #define CorILMethod_TinyFormat 0x02
 #define CorILMethod_MoreSects 0x08
@@ -66,17 +65,11 @@ struct tTypeStack_ {
 #define DeleteOps(ops_) free(ops_.p); free(ops_.pSequencePoints)
 
 // Turn this into a MACRO at some point?
-static U64 Translate(U32 op, U32 getDynamic) {
+static U32 Translate(U32 op) {
 	if (op >= JIT_OPCODE_MAXNUM) {
 		Crash("Illegal opcode: %d", op);
 	}
-	if (getDynamic) {
-		Crash("Illegal opcode: %d", op);
-		//return (U64)jitCodeInfo[op].isDynamic;
-		return 0;
-	} else {
-		return (U64)jitCodeInfo[op].pFunc;
-	}
+	return (U32)jitFuncs[op];
 }
 
 #define PushU32(v) PushU32_(&ops, (U32)(v), -1)
@@ -84,7 +77,7 @@ static U64 Translate(U32 op, U32 getDynamic) {
 #define PushFloat(v) convFloat.f=(float)(v); PushU32_(&ops, convFloat.u32, -1)
 #define PushDouble(v) convDouble.d=(double)(v); PushU32_(&ops, convDouble.u32.a, -1); PushU32_(&ops, convDouble.u32.b, -1)
 #define PushPTR(ptr) PushU32_(&ops, (U32)(ptr), -1)
-#define PushOp(op) PushU32_(&ops, Translate((U32)(op), 0), nextOpSequencePoint)
+#define PushOp(op) PushU32_(&ops, Translate((U32)(op)), nextOpSequencePoint)
 #define PushOpParam(op, param) PushOp(op); PushU32_(&ops, (U32)(param), -1)
 
 #define PushBranch() PushU32_(&branchOffsets, ops.ofs, -1)
@@ -1540,10 +1533,10 @@ void JIT_Prepare(tMD_MethodDef *pMethodDef, U32 genCombinedOpcodes) {
 			pJITted->maxStack = (pMethodDef->pReturnType == NULL)?0:pMethodDef->pReturnType->stackSize; // For return value
 		}
 		pCallNative = TMALLOCFOREVER(tJITCallNative);
-		pCallNative->opCode = Translate(JIT_CALL_NATIVE, 0);
+		pCallNative->opCode = Translate(JIT_CALL_NATIVE);
 		pCallNative->pMethodDef = pMethodDef;
 		pCallNative->fn = InternalCall_Map(pMethodDef);
-		pCallNative->retOpCode = Translate(JIT_RETURN, 0);
+		pCallNative->retOpCode = Translate(JIT_RETURN);
 
 		pJITted->localsStackSize = 0;
 		pJITted->pOps = (U32*)pCallNative;
@@ -1552,25 +1545,7 @@ void JIT_Prepare(tMD_MethodDef *pMethodDef, U32 genCombinedOpcodes) {
 		return;
 	}
 	if (pMethodDef->flags & METHODATTRIBUTES_PINVOKEIMPL) {
-		tJITCallPInvoke *pCallPInvoke;
-
-		// PInvoke call
-		tMD_ImplMap *pImplMap = MetaData_GetImplMap(pMetaData, pMethodDef->tableIndex);
-		fnPInvoke fn = PInvoke_GetFunction(pMetaData, pImplMap);
-		if (fn == NULL) {
-			Crash("PInvoke library or function not found: %s()", pImplMap->importName);
-		}
-
-		pCallPInvoke = TMALLOCFOREVER(tJITCallPInvoke);
-		pCallPInvoke->opCode = Translate(JIT_CALL_PINVOKE, 0);
-		pCallPInvoke->fn = fn;
-		pCallPInvoke->pMethod = pMethodDef;
-		pCallPInvoke->pImplMap = pImplMap;
-
-		pJITted->localsStackSize = 0;
-		pJITted->maxStack = (pMethodDef->pReturnType == NULL)?0:pMethodDef->pReturnType->stackSize; // For return value
-		pJITted->pOps = (U32*)pCallPInvoke;
-		pJITted->pOpSequencePoints = NULL;
+		Crash("PInvoke is unsupported.");
 
 		return;
 	}
